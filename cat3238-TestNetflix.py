@@ -6,15 +6,36 @@
 # imports
 # -------
 
+import os
+
 from io       import StringIO
 from unittest import main, TestCase
 
-from Netflix import netflix_read, netflix_eval, netflix_print, netflix_solve
+from contextlib import contextmanager
+from pickle     import dump
+
+from Netflix import (netflix_read, netflix_eval, netflix_load,
+                     netflix_print, netflix_rmse, netflix_solve, pickle_load)
+
+
+@contextmanager
+def temp_pickle(data, name, path=''):
+    """
+    open/close temp filled pickle file
+    data a blob of python data
+    name a filename string
+    path a path/dir string
+    """
+    filename = path + name
+    with open(filename, "wb") as pickle_file:
+        dump(data, pickle_file)
+    yield
+    os.remove(filename)
 
 # -----------
 # TestNetflix
 # -----------
-
+# pylint: disable=R0904
 class TestNetflix(TestCase):
     """Unit Tests for Netflix.py"""
     # ----
@@ -44,6 +65,75 @@ class TestNetflix(TestCase):
         except ValueError:
             error = True
         self.assertTrue(error)
+
+    # ------
+    # pickle
+    # ------
+
+    def test_pickle_1(self):
+        """Test pickle_load with array"""
+        name = 'test_pickle_1.p'
+        data_in = ['a', 'b', 'c']
+        with temp_pickle(data_in, name):
+            data_out = pickle_load(name, *['']*3)
+            self.assertEqual(data_in, data_out)
+
+    def test_pickle_2(self):
+        """Test pickle_load with dict"""
+        name = 'test_pickle_2.p'
+        data_in = {'a': 1, 'b': 2, 'c': 3}
+        with temp_pickle(data_in, name):
+            data_out = pickle_load(name, *['']*3)
+            self.assertEqual(data_in, data_out)
+
+    def test_pickle_3(self):
+        """Test pickle_load with int"""
+        name = 'test_pickle_3.p'
+        data_in = 123
+        with temp_pickle(data_in, name):
+            data_out = pickle_load(name, *['']*3)
+            self.assertEqual(data_in, data_out)
+
+    # ----
+    # load
+    # ----
+
+    def test_load_1(self):
+        """Test netflix_cache with pickle load"""
+        files = ['total']
+        data_in = [3.2281371945000967]
+        data_out = netflix_load(files, [])
+        self.assertEqual(data_in, data_out)
+
+    def test_load_2(self):
+        """Test netflix_cache with no pickle load"""
+        data_in = [123]
+        data_out = netflix_load('', data_in)
+        self.assertEqual(data_in, data_out)
+
+    # ----
+    # rmse
+    # ----
+
+    def test_rmse_1(self):
+        """Test netflix_rmse for correct prediction"""
+        rmse = netflix_rmse([(1, 1), (5, 5)])
+        self.assertEqual(rmse, 0.0)
+
+    def test_rmse_2(self):
+        """Test netflix_rmse for avg rating"""
+        rmse = round(netflix_rmse([(3.2, 1), (3.2, 5)]), 2)
+        self.assertEqual(rmse, 2.01)
+
+    def test_rmse_3(self):
+        """Test netflix_rmse for invalid input"""
+        error = False
+        try:
+            netflix_rmse([(1,)])
+        except ValueError:
+            error = True
+        self.assertTrue(error)
+
 
     # ----
     # eval
@@ -81,19 +171,19 @@ class TestNetflix(TestCase):
         """Test netflix_print for an int"""
         writer = StringIO()
         netflix_print(writer, 10)
-        self.assertEqual(writer.getvalue(), "10\n")
+        self.assertEqual(writer.getvalue(), '10\n')
 
     def test_print_2(self):
         """Test netflix_print for a string"""
         writer = StringIO()
         netflix_print(writer, 'abc')
-        self.assertEqual(writer.getvalue(), "abc\n")
+        self.assertEqual(writer.getvalue(), 'abc\n')
 
     def test_print_3(self):
         """Test netflix_print for 2 lines"""
         writer = StringIO()
         netflix_print(writer, 'abc\n123')
-        self.assertEqual(writer.getvalue(), "abc\n123\n")
+        self.assertEqual(writer.getvalue(), 'abc\n123\n')
 
     # -----
     # solve
@@ -101,14 +191,14 @@ class TestNetflix(TestCase):
 
     def test_solve_1(self):
         """Test netflix_solve"""
-        reader = StringIO("1123:\n448549\n2444222\n1522889\n")
+        reader = StringIO('1123:\n448549\n2444222\n1522889\n')
         writer = StringIO()
         netflix_solve(reader, writer)
-        self.assertEqual(writer.getvalue(), "1123:\n3.3\n2.9\n4.1\nRMSE: 0.4148335185443161\n")
+        self.assertEqual(writer.getvalue(), '1123:\n3.3\n2.9\n4.1\nRMSE: 0.4148335185443161\n')
 
     def test_solve_2(self):
         """Test netflix_solve"""
-        reader = StringIO("1:\n1989766\n\n2380848\n")
+        reader = StringIO('1:\n1989766\n\n1989766\n')
         writer = StringIO()
         error = False
         try:
@@ -116,6 +206,13 @@ class TestNetflix(TestCase):
         except ValueError:
             error = True
         self.assertTrue(error)
+
+    def test_solve_3(self):
+        """Test netflix_solve"""
+        reader = StringIO('1:\n1989766\n')
+        writer = StringIO()
+        netflix_solve(reader, writer)
+        self.assertEqual(writer.getvalue(), '1:\n4.0\nRMSE: 0.0\n')
 
 # ----
 # main
